@@ -74,16 +74,13 @@ jobs:
       - name: Generate and apply patches
         id: patch
         run: |
-          # Générer le patch depuis le fork ganawaj directement sur Linux
-          # évite les problèmes d'encodage lors de la génération sous Windows
-          git clone --depth 1 https://github.com/ganawaj/harvester-csi-driver.git ganawaj-src
+          git clone https://github.com/ganawaj/harvester-csi-driver.git ganawaj-src
           cd ganawaj-src
-          git fetch origin change-deps
+          git fetch origin master change-deps
           git diff origin/master..origin/change-deps -- pkg/csi/node_server.go \
             > ../mountpoint.patch
           cd ../upstream-src
 
-          # Appliquer le patch mountpoint
           echo "Applying: mountpoint patch"
           git apply ../mountpoint.patch || {
             echo "patch_failed=true" >> $GITHUB_OUTPUT
@@ -91,7 +88,6 @@ jobs:
             exit 1
           }
 
-          # Appliquer les éventuels patches supplémentaires du repo
           for patch in ../patches/*.patch; do
             [ -f "$patch" ] || continue
             echo "Applying: $(basename ${patch})"
