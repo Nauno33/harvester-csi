@@ -1,8 +1,8 @@
-# harvester-csi-driver — Talos-compatible build
+# harvester-csi — Talos-compatible build
 
 Custom build of [harvester/harvester-csi-driver](https://github.com/harvester/harvester-csi-driver) with patches to make it work on **Talos OS**.
 
-Images are published to `ghcr.io/<your-github-username>/harvester-csi-driver` and versioned to match upstream releases.
+Images are published to `ghcr.io/nauno33/harvester-csi` and versioned to match upstream releases.
 
 ---
 
@@ -22,7 +22,7 @@ This results in two distinct failures:
 | `NodeStageVolume` (attach) | `blkid` and `mkfs.ext4` not found — volume cannot be formatted |
 | `NodeUnstageVolume` (detach) | `nsenter: failed to execute mountpoint: No such file or directory` — VolumeAttachment stuck in `attached=true` |
 
-The inability to delete volumes when a PVC is deleted violates the `Delete` reclaim policy of the StorageClass and makes dynamic PVC management unusable.
+The inability to delete volumes when a PVC is deleted violates the `Delete` reclaim policy of the StorageClass and makes dynamic PVC management unusable on Talos.
 
 ---
 
@@ -57,7 +57,7 @@ This image (bci-base + tools + patch)
 Images are published automatically on each upstream release:
 
 ```
-ghcr.io/<your-github-username>/harvester-csi-driver:v0.2.4
+ghcr.io/nauno33/harvester-csi:v0.2.4
 ```
 
 The tag matches the upstream release tag exactly.
@@ -73,22 +73,18 @@ The tag matches the upstream release tag exactly.
 image:
   harvester:
     csiDriver:
-      repository: ghcr.io/<your-github-username>/harvester-csi-driver
+      repository: ghcr.io/nauno33/harvester-csi
       tag: "v0.2.4"
+kubeletRootDir: /var/lib/kubelet
 ```
 
 ```bash
+helm repo add harvester https://charts.harvesterhci.io/
+helm repo update
+
 helm upgrade --install harvester-csi-driver harvester/harvester-csi-driver \
   --namespace kube-system \
   --values values.yaml
-```
-
-### kubeletRootDir for Talos
-
-Talos uses the standard kubelet root directory. Ensure your values include:
-
-```yaml
-kubeletRootDir: /var/lib/kubelet
 ```
 
 ---
@@ -112,7 +108,7 @@ A GitHub Actions workflow runs daily at 6:00 AM UTC. It:
 3. Clones the upstream source at that tag
 4. Applies all patches from `patches/`
 5. Reads the Go version required from `go.mod` and updates the Dockerfile automatically
-6. Builds and pushes the image to `ghcr.io`
+6. Builds and pushes the image to `ghcr.io/nauno33/harvester-csi`
 
 To trigger a build manually for a specific tag, go to **Actions → Auto-build on upstream release → Run workflow** and set `upstream_tag`.
 

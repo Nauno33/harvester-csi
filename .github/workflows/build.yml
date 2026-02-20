@@ -1,0 +1,123 @@
+name: Auto-build on upstream release
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: 'Upstream tag to build (e.g. v0.2.5). Leave empty to use latest.'
+        required: false
+      force_rebuild:
+        description: 'Force rebuild even if image already exists'
+        required: false
+        default: 'false'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nauno33/harvester-csi
+  UPSTREAM_REPO: https://github.com/harvester/harvester-csi-driver.git
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve upstream tag
+        id: resolve
+        run: |
+          if [ -n "${{ inputs.upstream_tag }}" ]; then
+            TAG="${{ inputs.upstream_tag }}"
+          else
+            TAG=$(curl -s https://api.github.com/repos/harvester/harvester-csi-driver/releases/latest \
+              | jq -r '.tag_name')
+          fi
+          echo "Upstream tag: ${TAG}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Check if image already exists
+        id: check
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://ghcr.io/v2/${{ env.IMAGE_NAME }}/manifests/${TAG}")
+          if [ "${HTTP_CODE}" = "200" ] && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "Image ${TAG} already exists, skipping build"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: needs.prepare.outputs.skip != 'true'
+    permissions:
+      contents: read
+      packages: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone upstream at tag
+        run: |
+          git clone --depth 1 --branch "${{ needs.prepare.outputs.tag }}" \
+            ${{ env.UPSTREAM_REPO }} upstream-src
+
+      - name: Apply patches
+        id: patch
+        run: |
+          cd upstream-src
+          for patch in ../patches/*.patch; do
+            echo "Applying: $(basename ${patch})"
+            git apply "${patch}" || {
+              echo "patch_failed=true" >> $GITHUB_OUTPUT
+              echo "PATCH_NAME=$(basename ${patch})" >> $GITHUB_ENV
+              exit 1
+            }
+          done
+
+      - name: Open issue on patch failure
+        if: failure() && steps.patch.outputs.patch_failed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Patch incompatible with upstream ${{ needs.prepare.outputs.tag }}`,
+              body: `The patch \`${process.env.PATCH_NAME}\` failed to apply on upstream \`${{ needs.prepare.outputs.tag }}\`.\n\nManual intervention required:\n1. Clone upstream at this tag\n2. Update the patch in \`patches/\`\n3. Re-run the workflow manually`,
+              labels: ['maintenance']
+            })
+
+      - name: Update Go version from go.mod
+        run: |
+          GO_VERSION=$(grep '^go ' upstream-src/go.mod | awk '{print $2}' | cut -d. -f1,2)
+          echo "Go version required: ${GO_VERSION}"
+          cp Dockerfile upstream-src/Dockerfile
+          sed -i "s|FROM golang:.*AS builder|FROM golang:${GO_VERSION} AS builder|" upstream-src/Dockerfile
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: upstream-src
+          file: upstream-src/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/Nauno33/harvester-csi
+            org.opencontainers.image.description=Talos-compatible build of harvester-csi-driver ${{ needs.prepare.outputs.tag }}
