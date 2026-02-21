@@ -2,7 +2,7 @@
 
 Custom build of [harvester/harvester-csi-driver](https://github.com/harvester/harvester-csi-driver) with patches to make it work on **Talos OS**.
 
-Images are published to `ghcr.io/nauno33/harvester-csi` and versioned to match upstream releases.
+Images are published to `ghcr.io/arnaudtron/harvester-csi` and versioned to match upstream releases.
 
 ---
 
@@ -57,7 +57,7 @@ This image (bci-base + tools + patch)
 Images are published automatically on each upstream release:
 
 ```
-ghcr.io/nauno33/harvester-csi:v0.2.4
+ghcr.io/arnaudtron/harvester-csi:v0.2.4
 ```
 
 The tag matches the upstream release tag exactly.
@@ -73,7 +73,7 @@ The tag matches the upstream release tag exactly.
 image:
   harvester:
     csiDriver:
-      repository: ghcr.io/nauno33/harvester-csi
+      repository: ghcr.io/arnaudtron/harvester-csi
       tag: "v0.2.4"
 kubeletRootDir: /var/lib/kubelet
 ```
@@ -108,7 +108,7 @@ A GitHub Actions workflow runs daily at 6:00 AM UTC. It:
 3. Clones the upstream source at that tag
 4. Applies all patches from `patches/`
 5. Reads the Go version required from `go.mod` and updates the Dockerfile automatically
-6. Builds and pushes the image to `ghcr.io/nauno33/harvester-csi`
+6. Builds and pushes the image to `ghcr.io/arnaudtron/harvester-csi`
 
 To trigger a build manually for a specific tag, go to **Actions → Auto-build on upstream release → Run workflow** and set `upstream_tag`.
 

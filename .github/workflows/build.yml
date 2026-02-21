@@ -15,7 +15,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: nauno33/harvester-csi
+  IMAGE_NAME: arnaudtron/harvester-csi
   UPSTREAM_REPO: https://github.com/harvester/harvester-csi-driver.git
 
 jobs:
@@ -133,5 +133,5 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.prepare.outputs.tag }}
           labels: |
-            org.opencontainers.image.source=https://github.com/Nauno33/harvester-csi
+            org.opencontainers.image.source=https://github.com/arnaudtron/harvester-csi
             org.opencontainers.image.description=Talos-compatible build of harvester-csi-driver ${{ needs.prepare.outputs.tag }}
